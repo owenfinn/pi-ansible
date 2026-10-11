@@ -1,0 +1,15 @@
+---
+- name: Bootstrap Raspberry Pi
+  hosts: pis
+  tasks:
+    - name: Base system setup
+      ansible.builtin.include_role:
+        name: base
+
+    - name: Deploy each repo as a systemd service
+      ansible.builtin.include_role:
+        name: git_service
+      loop: "{{ managed_services }}"
+      loop_control:
+        loop_var: svc
+        label: "{{ svc.name }}"

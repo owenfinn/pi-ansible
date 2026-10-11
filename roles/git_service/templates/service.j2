@@ -1,0 +1,22 @@
+# Managed by Ansible - local changes will be overwritten
+[Unit]
+Description={{ svc.description | default(svc.name) }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ service_user }}
+WorkingDirectory={{ app_root }}/{{ svc.name }}
+ExecStart={{ svc.exec_start }}
+Restart=on-failure
+RestartSec=5
+{% for k, v in (svc.environment | default({})).items() %}
+Environment="{{ k }}={{ v }}"
+{% endfor %}
+{% if svc.extra_groups | default([]) %}
+SupplementaryGroups={{ svc.extra_groups | join(' ') }}
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

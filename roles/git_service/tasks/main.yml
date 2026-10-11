@@ -1,0 +1,60 @@
+---
+# Expects a `svc` dict (see group_vars/all.yml)
+- name: "{{ svc.name }} | Clone/update repo"
+  ansible.builtin.git:
+    repo: "{{ svc.repo }}"
+    dest: "{{ app_root }}/{{ svc.name }}"
+    version: "{{ svc.version | default('main') }}"
+    update: true
+  become: false
+  register: repo
+
+- name: "{{ svc.name }} | Check for requirements file"
+  ansible.builtin.stat:
+    path: "{{ app_root }}/{{ svc.name }}/{{ svc.requirements_file | default('requirements.txt') }}"
+  register: reqs
+  when: svc.runtime | default('none') == 'python'
+
+- name: "{{ svc.name }} | Install Python dependencies into venv"
+  ansible.builtin.pip:
+    requirements: "{{ app_root }}/{{ svc.name }}/{{ svc.requirements_file | default('requirements.txt') }}"
+    virtualenv: "{{ app_root }}/{{ svc.name }}/.venv"
+    virtualenv_command: python3 -m venv
+  become: false
+  register: deps
+  when:
+    - svc.runtime | default('none') == 'python'
+    - reqs.stat.exists
+
+- name: "{{ svc.name }} | Create venv even if there are no requirements"
+  ansible.builtin.command:
+    cmd: python3 -m venv .venv
+    chdir: "{{ app_root }}/{{ svc.name }}"
+    creates: "{{ app_root }}/{{ svc.name }}/.venv/bin/python"
+  become: false
+  when:
+    - svc.runtime | default('none') == 'python'
+    - not reqs.stat.exists
+
+- name: "{{ svc.name }} | Add service user to extra groups"
+  ansible.builtin.user:
+    name: "{{ service_user }}"
+    groups: "{{ svc.extra_groups }}"
+    append: true
+  when: svc.extra_groups | default([]) | length > 0
+
+- name: "{{ svc.name }} | Install systemd unit"
+  ansible.builtin.template:
+    src: service.j2
+    dest: "/etc/systemd/system/{{ svc.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  register: unit
+
+- name: "{{ svc.name }} | Enable and start (restart if anything changed)"
+  ansible.builtin.systemd:
+    name: "{{ svc.name }}"
+    daemon_reload: true
+    enabled: true
+    state: "{{ 'restarted' if (repo.changed or unit.changed or (deps.changed | default(false))) else 'started' }}"

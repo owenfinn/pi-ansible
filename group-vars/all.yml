@@ -1,0 +1,26 @@
+---
+# Where repos get cloned
+app_root: "/home/{{ ansible_user }}/apps"
+# User the services run as (defaults to the SSH user)
+service_user: "{{ ansible_user }}"
+
+base_packages:
+  - git
+  - python3
+  - python3-venv
+  - python3-pip
+
+# One entry per repo. Add more entries to add more services.
+managed_services:
+  - name: reminder-printer
+    repo: https://github.com/owenfinn/reminder-printer.git
+    version: main
+    # Runtime: "python" creates a venv and installs requirements; "none" skips it
+    runtime: python
+    requirements_file: requirements.txt
+    # {{ venv }} is expanded to <app_root>/<name>/.venv
+    # >>> ADJUST to match how the repo is actually started <<<
+    exec_start: "{{ app_root }}/reminder-printer/.venv/bin/python main.py"
+    # Extra groups for hardware access (e.g. lp/dialout for USB/serial printers)
+    extra_groups: [lp, dialout]
+    environment: {}
